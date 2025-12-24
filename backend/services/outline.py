@@ -16,6 +16,7 @@ class OutlineService:
         self.text_config = self._load_text_config()
         self.client = self._get_client()
         self.prompt_template = self._load_prompt_template()
+        self.summarize_prompt_template = self._load_summarize_prompt_template()
         logger.info(f"OutlineService 初始化完成，使用服务商: {self.text_config.get('active_provider')}")
 
     def _load_text_config(self) -> dict:
@@ -95,6 +96,60 @@ class OutlineService:
         with open(prompt_path, "r", encoding="utf-8") as f:
             return f.read()
 
+    def _load_summarize_prompt_template(self) -> str:
+        """加载内容摘要提示词模板"""
+        prompt_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "prompts",
+            "summarize_content_prompt.txt"
+        )
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def _summarize_content(self, content: str) -> str:
+        """
+        对网页内容进行精炼摘要
+        
+        Args:
+            content: 原始网页内容
+            
+        Returns:
+            精炼后的摘要内容
+        """
+        # 如果内容已经很短，无需摘要
+        if len(content) <= 4000:
+            logger.info(f"内容长度 {len(content)} 字，无需摘要")
+            return content
+        
+        logger.info(f"开始对网页内容进行摘要，原始长度: {len(content)} 字")
+        
+        try:
+            # 构建摘要提示词
+            summarize_prompt = self.summarize_prompt_template.format(content=content)
+            
+            # 获取模型配置
+            active_provider = self.text_config.get('active_provider', 'google_gemini')
+            providers = self.text_config.get('providers', {})
+            provider_config = providers.get(active_provider, {})
+            model = provider_config.get('model', 'gemini-2.0-flash-exp')
+            
+            # 调用 LLM 进行摘要
+            summary = self.client.generate_text(
+                prompt=summarize_prompt,
+                model=model,
+                temperature=0.3,  # 低温度确保摘要准确
+                max_output_tokens=6000
+            )
+            
+            logger.info(f"内容摘要完成，摘要长度: {len(summary)} 字")
+            return summary
+            
+        except Exception as e:
+            logger.warning(f"内容摘要失败，使用截断方式: {e}")
+            # 摘要失败时，回退到简单截断
+            return content[:8000] + "\n\n...(内容已截断)"
+
+
     def _parse_outline(self, outline_text: str) -> List[Dict[str, Any]]:
         # 按 <page> 分割页面（兼容旧的 --- 分隔符）
         if '<page>' in outline_text:
@@ -132,11 +187,22 @@ class OutlineService:
     def generate_outline(
         self,
         topic: str,
-        images: Optional[List[bytes]] = None
+        images: Optional[List[bytes]] = None,
+        source_content: Optional[str] = None
     ) -> Dict[str, Any]:
         try:
-            logger.info(f"开始生成大纲: topic={topic[:50]}..., images={len(images) if images else 0}")
-            prompt = self.prompt_template.format(topic=topic)
+            logger.info(f"开始生成大纲: topic={topic[:50]}..., images={len(images) if images else 0}, has_source={bool(source_content)}")
+            
+            # 准备参考内容
+            reference_text = ""
+            if source_content:
+                # 对长内容进行智能摘要，保留关键数据和金句
+                summarized_content = self._summarize_content(source_content)
+                reference_text = f"\n\n【创作素材】\n以下是经过整理的参考素材，包含关键数据、金句和核心观点，请在生成大纲时充分利用这些素材：\n\n{summarized_content}"
+                logger.debug(f"添加了网页参考内容到提示词，摘要长度: {len(summarized_content)} 字")
+            
+            # 格式化 prompt 模板
+            prompt = self.prompt_template.format(topic=topic, reference=reference_text)
 
             if images and len(images) > 0:
                 prompt += f"\n\n注意：用户提供了 {len(images)} 张参考图片，请在生成大纲时考虑这些图片的内容和风格。这些图片可能是产品图、个人照片或场景图，请根据图片内容来优化大纲，使生成的内容与图片相关联。"

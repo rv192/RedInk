@@ -22,8 +22,10 @@
         ref="composerRef"
         v-model="topic"
         :loading="loading"
+        :firecrawl-enabled="firecrawlEnabled"
         @generate="handleGenerate"
         @imagesChange="handleImagesChange"
+        @urlContentChange="handleUrlContentChange"
       />
     </div>
 
@@ -46,10 +48,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGeneratorStore } from '../stores/generator'
-import { generateOutline } from '../api'
+import { generateOutline, getFirecrawlStatus, type ScrapeResult } from '../api'
 
 // 引入组件
 import ShowcaseBackground from '../components/home/ShowcaseBackground.vue'
@@ -67,11 +69,35 @@ const composerRef = ref<InstanceType<typeof ComposerInput> | null>(null)
 // 上传的图片文件
 const uploadedImageFiles = ref<File[]>([])
 
+// Firecrawl 相关状态
+const firecrawlEnabled = ref(false)
+const urlContent = ref<ScrapeResult | null>(null)
+
+/**
+ * 检查 Firecrawl 状态
+ */
+async function checkFirecrawlStatus() {
+  try {
+    const status = await getFirecrawlStatus()
+    firecrawlEnabled.value = status.enabled && status.configured
+  } catch (e) {
+    // 如果检查失败，默认不启用
+    firecrawlEnabled.value = false
+  }
+}
+
 /**
  * 处理图片变化
  */
 function handleImagesChange(images: File[]) {
   uploadedImageFiles.value = images
+}
+
+/**
+ * 处理 URL 内容变化
+ */
+function handleUrlContentChange(content: ScrapeResult | null) {
+  urlContent.value = content
 }
 
 /**
@@ -85,10 +111,16 @@ async function handleGenerate() {
 
   try {
     const imageFiles = uploadedImageFiles.value
+    
+    // 获取网页抓取的内容（如果有）
+    const sourceContent = urlContent.value?.success && urlContent.value?.data?.content
+      ? urlContent.value.data.content
+      : undefined
 
     const result = await generateOutline(
       topic.value.trim(),
-      imageFiles.length > 0 ? imageFiles : undefined
+      imageFiles.length > 0 ? imageFiles : undefined,
+      sourceContent
     )
 
     if (result.success && result.pages) {
@@ -103,9 +135,11 @@ async function handleGenerate() {
         store.userImages = []
       }
 
-      // 清理 ComposerInput 的预览
+      // 清理 ComposerInput 的预览和 URL 状态
       composerRef.value?.clearPreviews()
+      composerRef.value?.clearUrlState?.()
       uploadedImageFiles.value = []
+      urlContent.value = null
 
       router.push('/outline')
     } else {
@@ -117,6 +151,11 @@ async function handleGenerate() {
     loading.value = false
   }
 }
+
+// 页面加载时检查 Firecrawl 状态
+onMounted(() => {
+  checkFirecrawlStatus()
+})
 </script>
 
 <style scoped>

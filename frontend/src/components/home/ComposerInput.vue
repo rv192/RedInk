@@ -40,6 +40,119 @@
       </div>
     </div>
 
+    <!-- URL 输入区域（仅当 firecrawlEnabled 时显示） -->
+    <div v-if="firecrawlEnabled && showUrlInput" class="url-input-section">
+      <div class="url-input-header">
+        <div class="url-input-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="2" y1="12" x2="22" y2="12"></line>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+          </svg>
+          <span>网页引用</span>
+        </div>
+        <button class="url-close-btn" @click="closeUrlInput" title="关闭">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="url-input-wrapper">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="url-link-icon">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+        </svg>
+        <input
+          type="url"
+          v-model="urlInput"
+          class="url-input"
+          placeholder="粘贴网页链接，如：https://example.com/article"
+          :disabled="loading || scrapeStatus === 'loading'"
+          @input="handleUrlInput"
+          @blur="handleUrlBlur"
+        />
+        <button
+          v-if="urlInput && scrapeStatus !== 'loading'"
+          class="url-clear-btn"
+          @click="clearUrl"
+          title="清除"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+        <div v-if="scrapeStatus === 'loading'" class="url-loading">
+          <span class="spinner-xs"></span>
+        </div>
+      </div>
+
+      <!-- 抓取结果展示 -->
+      <div v-if="scrapeStatus === 'success' && scrapeResult" class="scrape-result">
+        <div class="scrape-result-header">
+          <div class="scrape-result-status success">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <span>抓取成功</span>
+          </div>
+        </div>
+        <div class="scrape-result-card">
+          <div class="scrape-result-title">📄 {{ scrapeResult.data?.title || '未知标题' }}</div>
+          <div class="scrape-result-meta">
+            📊 共 {{ scrapeResult.data?.word_count?.toLocaleString() }} 字
+          </div>
+          <div class="scrape-result-preview">
+            {{ getContentPreview(scrapeResult.data?.content) }}
+          </div>
+          <button
+            class="scrape-detail-btn"
+            @click="showContentDetail = !showContentDetail"
+          >
+            {{ showContentDetail ? '收起详情' : '👁 查看详情' }}
+          </button>
+        </div>
+
+        <!-- 展开的详情 -->
+        <div v-if="showContentDetail" class="scrape-detail-content">
+          <div class="scrape-detail-text">
+            {{ getContentDetail(scrapeResult.data?.content) }}
+          </div>
+          <div class="scrape-detail-note">
+            （显示前 500 字，完整内容将用于生成大纲）
+          </div>
+        </div>
+      </div>
+
+      <!-- 抓取失败 -->
+      <div v-if="scrapeStatus === 'error'" class="scrape-result">
+        <div class="scrape-result-header">
+          <div class="scrape-result-status error">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="15" y1="9" x2="9" y2="15"></line>
+              <line x1="9" y1="9" x2="15" y2="15"></line>
+            </svg>
+            <span>抓取失败</span>
+          </div>
+        </div>
+        <div class="scrape-error-card">
+          <div class="scrape-error-msg">{{ scrapeError }}</div>
+          <div class="scrape-error-actions">
+            <button class="btn-text" @click="retryScrape">🔄 重试</button>
+            <button class="btn-text" @click="clearUrl">继续生成（不使用网页内容）</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 提示信息 -->
+      <div v-if="scrapeStatus === 'idle' && urlInput" class="url-hint">
+        💡 输入完成后会自动抓取网页内容作为创作参考
+      </div>
+    </div>
+
     <!-- 工具栏 -->
     <div class="composer-toolbar">
       <div class="toolbar-left">
@@ -59,6 +172,22 @@
           </svg>
           <span v-if="uploadedImages.length > 0" class="badge-count">{{ uploadedImages.length }}</span>
         </label>
+
+        <!-- 网页引用按钮（仅当 firecrawlEnabled 时显示） -->
+        <button
+          v-if="firecrawlEnabled"
+          class="tool-btn"
+          :class="{ 'active': showUrlInput || scrapeStatus === 'success' }"
+          @click="toggleUrlInput"
+          title="添加网页引用"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="2" y1="12" x2="22" y2="12"></line>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+          </svg>
+          <span v-if="scrapeStatus === 'success'" class="badge-check">✓</span>
+        </button>
       </div>
       <div class="toolbar-right">
         <button
@@ -75,7 +204,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue'
+import { ref, onUnmounted, watch } from 'vue'
+import { scrapeUrl, type ScrapeResult } from '../../api'
 
 /**
  * 主题输入组合框组件
@@ -83,6 +213,7 @@ import { ref, onUnmounted } from 'vue'
  * 功能：
  * - 主题文本输入（自动调整高度）
  * - 参考图片上传（最多5张）
+ * - 网页 URL 引用（需启用 Firecrawl）
  * - 生成按钮
  */
 
@@ -96,6 +227,7 @@ interface UploadedImage {
 const props = defineProps<{
   modelValue: string
   loading: boolean
+  firecrawlEnabled: boolean
 }>()
 
 // 定义 Emits
@@ -103,6 +235,7 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'generate'): void
   (e: 'imagesChange', images: File[]): void
+  (e: 'urlContentChange', content: ScrapeResult | null): void
 }>()
 
 // 输入框引用
@@ -110,6 +243,17 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null)
 
 // 已上传的图片
 const uploadedImages = ref<UploadedImage[]>([])
+
+// URL 输入相关状态
+const showUrlInput = ref(false)
+const urlInput = ref('')
+const scrapeStatus = ref<'idle' | 'loading' | 'success' | 'error'>('idle')
+const scrapeResult = ref<ScrapeResult | null>(null)
+const scrapeError = ref('')
+const showContentDetail = ref(false)
+
+// 防抖定时器
+let scrapeDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 /**
  * 处理输入变化
@@ -194,14 +338,151 @@ function clearPreviews() {
   uploadedImages.value = []
 }
 
+// ==================== URL 输入相关方法 ====================
+
+/**
+ * 切换 URL 输入区域显示
+ */
+function toggleUrlInput() {
+  showUrlInput.value = !showUrlInput.value
+}
+
+/**
+ * 关闭 URL 输入区域
+ */
+function closeUrlInput() {
+  showUrlInput.value = false
+  // 如果有成功抓取的内容，保留状态
+}
+
+/**
+ * 处理 URL 输入变化（防抖）
+ */
+function handleUrlInput() {
+  // 清除之前的定时器
+  if (scrapeDebounceTimer) {
+    clearTimeout(scrapeDebounceTimer)
+  }
+
+  // 重置状态
+  if (!urlInput.value.trim()) {
+    scrapeStatus.value = 'idle'
+    scrapeResult.value = null
+    emit('urlContentChange', null)
+    return
+  }
+
+  // 设置新的防抖定时器
+  scrapeDebounceTimer = setTimeout(() => {
+    doScrape()
+  }, 1500)
+}
+
+/**
+ * URL 输入框失焦时立即抓取
+ */
+function handleUrlBlur() {
+  if (urlInput.value.trim() && scrapeStatus.value === 'idle') {
+    // 取消防抖，立即抓取
+    if (scrapeDebounceTimer) {
+      clearTimeout(scrapeDebounceTimer)
+    }
+    doScrape()
+  }
+}
+
+/**
+ * 执行抓取
+ */
+async function doScrape() {
+  const url = urlInput.value.trim()
+  if (!url) return
+
+  // 简单的 URL 格式验证
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    scrapeStatus.value = 'error'
+    scrapeError.value = '请输入有效的网页链接（以 http:// 或 https:// 开头）'
+    return
+  }
+
+  scrapeStatus.value = 'loading'
+  scrapeError.value = ''
+
+  try {
+    const result = await scrapeUrl(url)
+    
+    if (result.success && result.data) {
+      scrapeStatus.value = 'success'
+      scrapeResult.value = result
+      emit('urlContentChange', result)
+    } else {
+      scrapeStatus.value = 'error'
+      scrapeError.value = result.error || '抓取失败，请检查链接是否正确'
+      emit('urlContentChange', null)
+    }
+  } catch (error: any) {
+    scrapeStatus.value = 'error'
+    scrapeError.value = error.response?.data?.error || error.message || '网络错误，请稍后重试'
+    emit('urlContentChange', null)
+  }
+}
+
+/**
+ * 重试抓取
+ */
+function retryScrape() {
+  doScrape()
+}
+
+/**
+ * 清除 URL
+ */
+function clearUrl() {
+  urlInput.value = ''
+  scrapeStatus.value = 'idle'
+  scrapeResult.value = null
+  scrapeError.value = ''
+  showContentDetail.value = false
+  emit('urlContentChange', null)
+}
+
+/**
+ * 获取内容预览（前 100 字）
+ */
+function getContentPreview(content?: string): string {
+  if (!content) return ''
+  const preview = content.substring(0, 100).replace(/\n/g, ' ')
+  return preview + (content.length > 100 ? '...' : '')
+}
+
+/**
+ * 获取内容详情（前 500 字）
+ */
+function getContentDetail(content?: string): string {
+  if (!content) return ''
+  return content.substring(0, 500)
+}
+
+/**
+ * 清理 URL 相关状态
+ */
+function clearUrlState() {
+  clearUrl()
+  showUrlInput.value = false
+}
+
 // 组件卸载时清理
 onUnmounted(() => {
   clearPreviews()
+  if (scrapeDebounceTimer) {
+    clearTimeout(scrapeDebounceTimer)
+  }
 })
 
 // 暴露方法给父组件
 defineExpose({
-  clearPreviews
+  clearPreviews,
+  clearUrlState
 })
 </script>
 
@@ -311,6 +592,245 @@ defineExpose({
   text-align: right;
 }
 
+/* URL 输入区域 */
+.url-input-section {
+  margin-top: 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.url-input-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.url-input-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.url-close-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.url-close-btn:hover {
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.url-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  transition: border-color 0.2s;
+}
+
+.url-input-wrapper:focus-within {
+  border-color: var(--primary, #ff2442);
+}
+
+.url-link-icon {
+  flex-shrink: 0;
+  color: #94a3b8;
+}
+
+.url-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  color: var(--text-main, #1a1a1a);
+}
+
+.url-input::placeholder {
+  color: #94a3b8;
+}
+
+.url-clear-btn {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: #f1f5f9;
+  cursor: pointer;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.url-clear-btn:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.url-loading {
+  display: flex;
+  align-items: center;
+}
+
+.spinner-xs {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #e2e8f0;
+  border-top-color: var(--primary, #ff2442);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.url-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* 抓取结果 */
+.scrape-result {
+  margin-top: 12px;
+}
+
+.scrape-result-header {
+  margin-bottom: 8px;
+}
+
+.scrape-result-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.scrape-result-status.success {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.scrape-result-status.error {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.scrape-result-card {
+  background: white;
+  border-radius: 8px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.scrape-result-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.scrape-result-meta {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.scrape-result-preview {
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.scrape-detail-btn {
+  background: none;
+  border: none;
+  color: var(--primary, #ff2442);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.scrape-detail-btn:hover {
+  text-decoration: underline;
+}
+
+.scrape-detail-content {
+  margin-top: 12px;
+  padding: 12px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.scrape-detail-text {
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.scrape-detail-note {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.scrape-error-card {
+  background: white;
+  border-radius: 8px;
+  padding: 12px;
+  border: 1px solid #fecaca;
+}
+
+.scrape-error-msg {
+  font-size: 13px;
+  color: #dc2626;
+  margin-bottom: 12px;
+}
+
+.scrape-error-actions {
+  display: flex;
+  gap: 16px;
+}
+
+.btn-text {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.btn-text:hover {
+  color: var(--primary, #ff2442);
+}
+
 /* 工具栏 */
 .composer-toolbar {
   display: flex;
@@ -366,6 +886,22 @@ defineExpose({
   align-items: center;
   justify-content: center;
   padding: 0 4px;
+}
+
+.badge-check {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  background: #16a34a;
+  color: white;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* 生成按钮 */

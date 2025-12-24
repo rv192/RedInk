@@ -2,6 +2,39 @@ import axios from 'axios'
 
 const API_BASE_URL = '/api'
 
+// ==================== Firecrawl 相关接口 ====================
+
+export interface FirecrawlStatus {
+  success: boolean
+  enabled: boolean
+  configured: boolean
+}
+
+export interface ScrapeResult {
+  success: boolean
+  data?: {
+    title: string
+    content: string
+    word_count: number
+    url: string
+  }
+  error?: string
+}
+
+// 获取 Firecrawl 状态
+export async function getFirecrawlStatus(): Promise<FirecrawlStatus> {
+  const response = await axios.get<FirecrawlStatus>(`${API_BASE_URL}/firecrawl/status`)
+  return response.data
+}
+
+// 抓取 URL 内容
+export async function scrapeUrl(url: string): Promise<ScrapeResult> {
+  const response = await axios.post<ScrapeResult>(`${API_BASE_URL}/firecrawl/scrape`, { url })
+  return response.data
+}
+
+// ==================== 原有接口 ====================
+
 export interface Page {
   index: number
   type: 'cover' | 'content' | 'summary'
@@ -30,10 +63,11 @@ export interface FinishEvent {
   images: string[]
 }
 
-// 生成大纲（支持图片上传）
+// 生成大纲（支持图片上传和网页参考内容）
 export async function generateOutline(
   topic: string,
-  images?: File[]
+  images?: File[],
+  sourceContent?: string
 ): Promise<OutlineResponse & { has_images?: boolean }> {
   // 如果有图片，使用 FormData
   if (images && images.length > 0) {
@@ -42,6 +76,10 @@ export async function generateOutline(
     images.forEach((file) => {
       formData.append('images', file)
     })
+    // 添加网页参考内容
+    if (sourceContent) {
+      formData.append('source_content', sourceContent)
+    }
 
     const response = await axios.post<OutlineResponse & { has_images?: boolean }>(
       `${API_BASE_URL}/outline`,
@@ -57,7 +95,8 @@ export async function generateOutline(
 
   // 无图片，使用 JSON
   const response = await axios.post<OutlineResponse>(`${API_BASE_URL}/outline`, {
-    topic
+    topic,
+    source_content: sourceContent
   })
   return response.data
 }
