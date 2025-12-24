@@ -14,6 +14,61 @@ class Config:
 
     _image_providers_config = None
     _text_providers_config = None
+    _firecrawl_config = None
+
+    @classmethod
+    def load_firecrawl_config(cls):
+        """加载 Firecrawl 配置"""
+        if cls._firecrawl_config is not None:
+            return cls._firecrawl_config
+
+        config_path = Path(__file__).parent.parent / 'firecrawl_config.yaml'
+        logger.debug(f"加载 Firecrawl 配置: {config_path}")
+
+        if not config_path.exists():
+            logger.debug(f"Firecrawl 配置文件不存在: {config_path}，使用默认配置（禁用）")
+            cls._firecrawl_config = {
+                'enabled': False,
+                'api_key': '',
+                'base_url': ''
+            }
+            return cls._firecrawl_config
+
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                cls._firecrawl_config = yaml.safe_load(f) or {}
+            # 确保必要字段存在
+            cls._firecrawl_config.setdefault('enabled', False)
+            cls._firecrawl_config.setdefault('api_key', '')
+            cls._firecrawl_config.setdefault('base_url', '')
+            logger.debug(f"Firecrawl 配置加载成功: enabled={cls._firecrawl_config.get('enabled')}")
+        except yaml.YAMLError as e:
+            logger.error(f"Firecrawl 配置文件 YAML 格式错误: {e}")
+            raise ValueError(
+                f"配置文件格式错误: firecrawl_config.yaml\n"
+                f"YAML 解析错误: {e}\n"
+                "解决方案：\n"
+                "1. 检查 YAML 缩进是否正确（使用空格，不要用Tab）\n"
+                "2. 检查引号是否配对\n"
+                "3. 使用在线 YAML 验证器检查格式"
+            )
+
+        return cls._firecrawl_config
+
+    @classmethod
+    def get_firecrawl_config(cls):
+        """获取 Firecrawl 配置（如果已启用）"""
+        config = cls.load_firecrawl_config()
+
+        if not config.get('enabled'):
+            return None
+
+        # 返回配置副本
+        return {
+            'enabled': config.get('enabled', False),
+            'api_key': config.get('api_key', ''),
+            'base_url': config.get('base_url', '') or 'https://api.firecrawl.dev'
+        }
 
     @classmethod
     def load_image_providers_config(cls):
@@ -151,3 +206,4 @@ class Config:
         logger.info("重新加载所有配置...")
         cls._image_providers_config = None
         cls._text_providers_config = None
+        cls._firecrawl_config = None

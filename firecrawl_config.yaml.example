@@ -1,0 +1,16 @@
+# Firecrawl API 配置（可选）
+# 用于网页内容抓取，将 URL 转换为 LLM 可读的 Markdown 格式
+# 复制此文件为 firecrawl_config.yaml 并填写你的配置
+
+# 是否启用 Firecrawl
+enabled: false
+
+# API Key（可选，根据服务商要求填写）
+# 云端版本：在 https://firecrawl.dev 获取
+# 本地部署：根据配置决定是否需要
+api_key: ""
+
+# Base URL（可选）
+# 云端版本：留空或不填，默认使用 https://api.firecrawl.dev
+# 本地部署：填写本地服务地址，如 http://localhost:3002
+base_url: ""

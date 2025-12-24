@@ -1,6 +1,7 @@
 services:
   redink:
-    image: histonemax/redink:latest
+    build: .
+    image: redink:local
     container_name: redink
     ports:
       - "12398:12398"
@@ -11,4 +12,5 @@ services:
       # 可选：挂载自定义配置文件
       # - ./text_providers.yaml:/app/text_providers.yaml
       # - ./image_providers.yaml:/app/image_providers.yaml
+      # - ./firecrawl_config.yaml:/app/firecrawl_config.yaml
     restart: unless-stopped

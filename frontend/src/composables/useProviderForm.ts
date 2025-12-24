@@ -67,6 +67,15 @@ export const imageTypeOptions = [
   { value: 'image_api', label: 'OpenAI 兼容接口' }
 ]
 
+// Firecrawl 配置接口
+export interface FirecrawlConfig {
+  enabled: boolean
+  api_key: string
+  api_key_masked: string
+  base_url: string
+  _has_api_key: boolean
+}
+
 /**
  * 服务商表单管理 Hook
  */
@@ -76,6 +85,7 @@ export function useProviderForm() {
   const saving = ref(false)
   const testingText = ref(false)
   const testingImage = ref(false)
+  const testingFirecrawl = ref(false)
 
   // 配置数据
   const textConfig = ref<ProviderConfig>({
@@ -86,6 +96,15 @@ export function useProviderForm() {
   const imageConfig = ref<ProviderConfig>({
     active_provider: '',
     providers: {}
+  })
+
+  // Firecrawl 配置
+  const firecrawlConfig = ref<FirecrawlConfig>({
+    enabled: false,
+    api_key: '',
+    api_key_masked: '',
+    base_url: '',
+    _has_api_key: false
   })
 
   // 文本服务商弹窗状态
@@ -145,6 +164,16 @@ export function useProviderForm() {
           providers: result.config.text_generation.providers
         }
         imageConfig.value = result.config.image_generation
+        // 加载 Firecrawl 配置
+        if (result.config.firecrawl) {
+          firecrawlConfig.value = {
+            enabled: result.config.firecrawl.enabled || false,
+            api_key: '',
+            api_key_masked: result.config.firecrawl.api_key_masked || '',
+            base_url: result.config.firecrawl.base_url || '',
+            _has_api_key: result.config.firecrawl._has_api_key || false
+          }
+        }
       } else {
         alert('加载配置失败: ' + (result.error || '未知错误'))
       }
@@ -500,16 +529,77 @@ export function useProviderForm() {
     imageForm.value = data
   }
 
+  // ==================== Firecrawl 操作 ====================
+
+  /**
+   * 保存 Firecrawl 配置
+   */
+  async function saveFirecrawlConfig() {
+    try {
+      const configData: any = {
+        firecrawl: {
+          enabled: firecrawlConfig.value.enabled,
+          base_url: firecrawlConfig.value.base_url
+        }
+      }
+
+      // 只有在用户输入了新的 API Key 时才发送
+      if (firecrawlConfig.value.api_key) {
+        configData.firecrawl.api_key = firecrawlConfig.value.api_key
+      }
+
+      const result = await updateConfig(configData)
+      if (result.success) {
+        // 重新加载配置以获取最新的脱敏 API Key
+        await loadConfig()
+      }
+    } catch (e) {
+      console.error('保存 Firecrawl 配置失败:', e)
+      alert('保存配置失败: ' + String(e))
+    }
+  }
+
+  /**
+   * 测试 Firecrawl 连接
+   */
+  async function testFirecrawlConnection() {
+    testingFirecrawl.value = true
+    try {
+      const result = await testConnection({
+        type: 'firecrawl',
+        api_key: firecrawlConfig.value.api_key || undefined,
+        base_url: firecrawlConfig.value.base_url,
+        model: ''
+      })
+      if (result.success) {
+        alert('✅ ' + result.message)
+      }
+    } catch (e: any) {
+      alert('❌ 连接失败：' + (e.response?.data?.error || e.message))
+    } finally {
+      testingFirecrawl.value = false
+    }
+  }
+
+  /**
+   * 更新 Firecrawl 配置数据
+   */
+  function updateFirecrawlConfig(data: Partial<FirecrawlConfig>) {
+    firecrawlConfig.value = { ...firecrawlConfig.value, ...data }
+  }
+
   return {
     // 状态
     loading,
     saving,
     testingText,
     testingImage,
+    testingFirecrawl,
 
     // 配置数据
     textConfig,
     imageConfig,
+    firecrawlConfig,
 
     // 文本服务商弹窗
     showTextModal,
@@ -544,6 +634,12 @@ export function useProviderForm() {
     deleteImageProvider,
     testImageConnection,
     testImageProviderInList,
-    updateImageForm
+    updateImageForm,
+
+    // Firecrawl 方法
+    saveFirecrawlConfig,
+    testFirecrawlConnection,
+    updateFirecrawlConfig
   }
 }
+

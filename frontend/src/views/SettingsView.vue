@@ -64,6 +64,67 @@
           @test="testImageProviderInList"
         />
       </div>
+
+      <!-- Firecrawl 配置（可选） -->
+      <div class="card">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Firecrawl 配置（可选）</h2>
+            <p class="section-desc">用于抓取网页内容，将 URL 转换为 LLM 可读格式</p>
+          </div>
+        </div>
+
+        <div class="firecrawl-form">
+          <!-- 启用开关 -->
+          <div class="form-row">
+            <label class="toggle-label">
+              <input
+                type="checkbox"
+                v-model="firecrawlConfig.enabled"
+                @change="saveFirecrawlConfig"
+              />
+              <span>启用 Firecrawl</span>
+            </label>
+          </div>
+
+          <template v-if="firecrawlConfig.enabled">
+            <!-- Base URL -->
+            <div class="form-row">
+              <label class="form-label">Base URL（本地部署必填，云端版本可留空）</label>
+              <input
+                type="text"
+                class="form-input"
+                v-model="firecrawlConfig.base_url"
+                placeholder="https://api.firecrawl.dev 或 http://localhost:3002"
+                @blur="saveFirecrawlConfig"
+              />
+            </div>
+
+            <!-- API Key -->
+            <div class="form-row">
+              <label class="form-label">API Key（可选，部分本地部署无需 token）</label>
+              <input
+                type="password"
+                class="form-input"
+                v-model="firecrawlConfig.api_key"
+                :placeholder="firecrawlConfig._has_api_key ? '•••••••• (已配置)' : '留空则不使用 API Key'"
+                @blur="saveFirecrawlConfig"
+              />
+            </div>
+
+            <!-- 测试连接按钮 -->
+            <div class="form-row">
+              <button
+                class="btn btn-small"
+                :disabled="testingFirecrawl"
+                @click="testFirecrawlConnection"
+              >
+                {{ testingFirecrawl ? '测试中...' : '测试连接' }}
+              </button>
+            </div>
+          </template>
+        </div>
+      </div>
     </div>
 
     <!-- 文本服务商弹窗 -->
@@ -112,6 +173,7 @@ import {
  * 功能：
  * - 管理文本生成服务商配置
  * - 管理图片生成服务商配置
+ * - 管理 Firecrawl 配置
  * - 测试 API 连接
  */
 
@@ -121,10 +183,12 @@ const {
   loading,
   testingText,
   testingImage,
+  testingFirecrawl,
 
   // 配置数据
   textConfig,
   imageConfig,
+  firecrawlConfig,
 
   // 文本服务商弹窗
   showTextModal,
@@ -159,7 +223,11 @@ const {
   deleteImageProvider,
   testImageConnection,
   testImageProviderInList,
-  updateImageForm
+  updateImageForm,
+
+  // Firecrawl 方法
+  saveFirecrawlConfig,
+  testFirecrawlConnection
 } = useProviderForm()
 
 onMounted(() => {
@@ -211,4 +279,52 @@ onMounted(() => {
   padding: 80px 20px;
   color: #666;
 }
+
+/* Firecrawl 表单样式 */
+.firecrawl-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-input {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #007aff;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+}
+
+.toggle-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
 </style>
+

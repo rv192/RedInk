@@ -411,6 +411,12 @@ export interface Config {
     active_provider: string
     providers: Record<string, any>
   }
+  firecrawl: {
+    enabled: boolean
+    api_key_masked?: string
+    base_url?: string
+    _has_api_key?: boolean
+  }
 }
 
 // 获取配置
